@@ -24,10 +24,11 @@ float CompletedDistance = 0, Speed = 0;
 int Pace = 0;
 int Acc = 0, Gyro = 0;
 bool Bluetooth_connect = false;
+bool service_started = false;
 BLECharacteristic *pCharacteristic;
 BLEService *pService;
 BLEServer *pServer;
-
+BLEAdvertising *pAdvertising;
 
 void grafcet0();
 void datapath0();
@@ -74,13 +75,22 @@ void ShortVibration();
 void setup()
 {
     Serial.begin(115200);
-    printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
+    BLEDevice::init("MyESP32");
+    pServer = BLEDevice::createServer();
+    pService = pServer->createService(SERVICE_UUID);
+    pCharacteristic = pService->createCharacteristic(
+                      CHARACTERISTIC_UUID,
+                      BLECharacteristic::PROPERTY_READ |
+                      BLECharacteristic::PROPERTY_WRITE |
+                      BLECharacteristic::PROPERTY_NOTIFY |
+                      BLECharacteristic::PROPERTY_INDICATE
+                    );
 }
 void loop()
 {
     datapath0();
 	  grafcet0();
-  	printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
+  	//printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
   
   	delay(1000);
 }
@@ -134,7 +144,7 @@ void grafcet1()
 		return;
 	}
 
-	if((X12 == 1) && (1))
+	if((X12 == 1) && Distance && Time)
 	{
 		X12 = 0;
 		X10 = 1;
@@ -386,16 +396,16 @@ void datapath22()
 }
 void action0()
 {
-	Serial.println("action0 activate !!\n");
+	//Serial.println("action0 activate !!\n");
 }
 
 
 void InitialSetupModule()
 {
-	Serial.println("InitialSetupModule activate !!\n");
+	//Serial.println("InitialSetupModule activate !!\n");
 	datapath1();
 	grafcet1();
-	printf("X10 = %d, X11 = %d, X12 = %d\n",X10 ,X11 ,X12 );
+	//printf("X10 = %d, X11 = %d, X12 = %d\n",X10 ,X11 ,X12 );
 }
 
 
@@ -404,7 +414,7 @@ void SignalProcessingAndSpeedFeedbackModule()
 	Serial.println("SignalProcessingAndSpeedFeedbackModule activate !!\n");
 	datapath2();
 	grafcet2();
-	printf("X20 = %d,X21 = %d,X22 = %d\n",X20 ,X21 ,X22 );
+	//printf("X20 = %d,X21 = %d,X22 = %d\n",X20 ,X21 ,X22 );
 }
 void DisplayData()
 {
@@ -412,22 +422,22 @@ void DisplayData()
 }
 void action10()
 {
-	Serial.println("action10 activate !!\n");
+	//Serial.println("action10 activate !!\n");
 }
 void InitialPaceModule()
 {
-	Serial.println("InitialPaceModule activate !!\n");
+	//Serial.println("InitialPaceModule activate !!\n");
 	//datapath11();
 	//grafcet11();
 	//printf("X110 = %d,X111 = %d,X112 = %d,X113 = %d\n",X110 ,X111 ,X112, X113 );
 }
 void BluetoothTransmissionModule()
 {
-	Serial.println("BluetoothTransmissionModule activate !!\n");
+	//Serial.println("BluetoothTransmissionModule activate !!\n");
 	datapath12();
 	grafcet12();
 	//printf("X120 = %d,X121 = %d,X122 = %d,X123 = %d\n",X120 ,X121 ,X122 ,X123 );
-  printf("X120 = %d,X121 = %d,X122 = %d\n",X120 ,X121 ,X122 );
+  //printf("X120 = %d,X121 = %d,X122 = %d\n",X120 ,X121 ,X122 );
 
 }
 
@@ -453,12 +463,11 @@ void GetDefaultTime()
 
 void action120()
 {
-	Serial.println("action120 activate !!\n");
+	//Serial.println("action120 activate !!\n");
 }
 void SetupConnectionBluetooth()
 {
-	Serial.println("SetupConnectionBluetooth activate !!\n");
-	Serial.println("Starting BLE Server");
+	//Serial.println("SetupConnectionBluetooth activate !!\n");
 	
 	class MyServerCallbacks: public BLEServerCallbacks {
 		void onConnect(BLEServer* pServer) {
@@ -472,12 +481,14 @@ void SetupConnectionBluetooth()
 		}
 	};
 
-	BLEDevice::init("MyESP32");
-	pServer = BLEDevice::createServer();
 	pServer->setCallbacks(new MyServerCallbacks());
-	//pServer->start();
 
-	
+  pAdvertising = pServer->getAdvertising();
+  pAdvertising->setScanResponse(true);
+  pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+  pAdvertising->setMinPreferred(0x12);
+  pAdvertising->start();	
+  Serial.println("Starting BLE Server");
 }
 /*void SendDistanceTimebyCellphone()
 {
@@ -490,98 +501,83 @@ void GetDistanceTimebyDevice()
 	class MyCharacCallbacks: public BLECharacteristicCallbacks {
 		void onWrite(BLECharacteristic* pCharacteristic){
 			std::string value = pCharacteristic->getValue();
-			Serial.println(value.c_str());
+			//Serial.println(value.c_str());
 			if(value.find("Distance")==0){
 				Distance = stof(value.substr(10, value.size()-13));
-				Serial.println(Distance);
+				printf("Distance: %.2f km\n",Distance);
 			}
 			if(value.find("Time")==0){
 				Time = stof(value.substr(6, value.size()-11));
-				Serial.println(Time);
+				printf("Time: %.2f mins\n",Time);
 			}
 		}
 	};
-	pService = pServer->createService(SERVICE_UUID);
-	pCharacteristic = pService->createCharacteristic(
-											CHARACTERISTIC_UUID,
-											BLECharacteristic::PROPERTY_READ |
-											BLECharacteristic::PROPERTY_WRITE |
-											BLECharacteristic::PROPERTY_NOTIFY |
-											BLECharacteristic::PROPERTY_INDICATE
-										);
-
+	
 	pCharacteristic->addDescriptor(new BLE2902());
 	pCharacteristic->setCallbacks(new MyCharacCallbacks());
-	pService->start();
-
-
-	BLEAdvertising *pAdvertising = pServer->getAdvertising();
+  if (!service_started) {
+    pService->start();
+    service_started = true;
+  }
 	pAdvertising->addServiceUUID(pService->getUUID());
-	pAdvertising->setScanResponse(true);
-	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-	pAdvertising->setMinPreferred(0x12);
-
-	pAdvertising->start();
-
-	Serial.println("Characteristic defined!");
 }
 
 
 void action20()
 {
-	Serial.println("action20 activate !!\n");
+	//Serial.println("action20 activate !!\n");
 }
 void SignalProcessingModule()
 {
 	Serial.println("SignalProcessingModule activate !!\n");
 	datapath21();
 	grafcet21();
-	printf("X210 = %d,X211 = %d,X212 = %d,X213 = %d,X214 = %d,X215 = %d,X216 = %d\n",X210 ,X211 ,X212 ,X213 ,X214 ,X215 ,X216 );
+	//printf("X210 = %d,X211 = %d,X212 = %d,X213 = %d,X214 = %d,X215 = %d,X216 = %d\n",X210 ,X211 ,X212 ,X213 ,X214 ,X215 ,X216 );
 }
 void SpeedFeedbackModule()
 {
 	Serial.println("SpeedFeedbackModule activate !!\n");
 	datapath22();
 	grafcet22();
-	printf("X220 = %d,X221 = %d,X222 = %d\n",X220 ,X221 ,X222 );
+	//printf("X220 = %d,X221 = %d,X222 = %d\n",X220 ,X221 ,X222 );
 }
 void action210()
 {
-	Serial.println("action210 activate !!\n");
+	//Serial.println("action210 activate !!\n");
 }
 void CalculatePace()
 {
-	Serial.println("CalculatePace activate !!\n");
+	//Serial.println("CalculatePace activate !!\n");
 }
 void ReadAccelerometerGyroscope()
 {
-	Serial.println("ReadAccelerometerGyroscope activate !!\n");
+	//Serial.println("ReadAccelerometerGyroscope activate !!\n");
 }
 void CalculateSpeed()
 {
-	Serial.println("CalculateSpeed activate !!\n");
+	//Serial.println("CalculateSpeed activate !!\n");
 }
 void CalculateStep()
 {
-	Serial.println("CalculateStep activate !!\n");
+	//Serial.println("CalculateStep activate !!\n");
 }
 void CalculateStride()
 {
-	Serial.println("CalculateStride activate !!\n");
+	//Serial.println("CalculateStride activate !!\n");
 }
 void CalculateDistance()
 {
-	Serial.println("CalculateDistance activate !!\n");
+	//Serial.println("CalculateDistance activate !!\n");
 }
 void action220()
 {
-	Serial.println("action220 activate !!\n");
+	//Serial.println("action220 activate !!\n");
 }
 void LongVibration()
 {
-	Serial.println("LongVibration activate !!\n");
+	//Serial.println("LongVibration activate !!\n");
 }
 void ShortVibration()
 {
-	Serial.println("ShortVibration activate !!\n");
+	//Serial.println("ShortVibration activate !!\n");
 }
