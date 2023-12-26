@@ -25,6 +25,8 @@ int Pace = 0;
 int Acc = 0, Gyro = 0;
 bool Bluetooth_connect = false;
 BLECharacteristic *pCharacteristic;
+BLEService *pService;
+BLEServer *pServer;
 
 
 void grafcet0();
@@ -71,14 +73,13 @@ void ShortVibration();
 
 void setup()
 {
-  Serial.begin(115200);
-  printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
-
+    Serial.begin(115200);
+    printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
 }
 void loop()
 {
-  	datapath0();
-	grafcet0();
+    datapath0();
+	  grafcet0();
   	printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
   
   	delay(1000);
@@ -89,7 +90,7 @@ void grafcet0()
 
 	if((X0 == 1) && (1))
 	{
-		X0 = 0;
+    X0 = 0;
 		X1 = 1;
 		return;
 	}
@@ -164,7 +165,7 @@ void grafcet1()
 void grafcet12()
 {
 
-	if((X120 == 1) && (Distance && Time))
+	if((X120 == 1))
 	{
 		X120 = 0;
 		X121 = 1;
@@ -456,13 +457,14 @@ void action120()
 }
 void SetupConnectionBluetooth()
 {
-	BLEServer *pServer;
+	Serial.println("SetupConnectionBluetooth activate !!\n");
+	Serial.println("Starting BLE Server");
 	
 	class MyServerCallbacks: public BLEServerCallbacks {
 		void onConnect(BLEServer* pServer) {
 			Serial.println("Client connected");
-			pCharacteristic->setValue("hello client!");
-			pCharacteristic->notify();
+			//pCharacteristic->setValue("hello client!");
+			//pCharacteristic->notify();
 			Bluetooth_connect = true;
 		};
 		void onDisconnect(BLEServer* pServer) {
@@ -470,36 +472,12 @@ void SetupConnectionBluetooth()
 		}
 	};
 
-	Serial.println("SetupConnectionBluetooth activate !!\n");
-	Serial.println("Starting BLE Server");
-
 	BLEDevice::init("MyESP32");
 	pServer = BLEDevice::createServer();
 	pServer->setCallbacks(new MyServerCallbacks());
+	//pServer->start();
 
-	BLEService *pService = pServer->createService(SERVICE_UUID);
-
-	pCharacteristic = pService->createCharacteristic(
-											CHARACTERISTIC_UUID,
-											BLECharacteristic::PROPERTY_READ |
-											BLECharacteristic::PROPERTY_WRITE |
-											BLECharacteristic::PROPERTY_NOTIFY |
-											BLECharacteristic::PROPERTY_INDICATE
-										);
-
-	pCharacteristic->addDescriptor(new BLE2902());
 	
-	pService->start();
-
-	BLEAdvertising *pAdvertising = pServer->getAdvertising();
-	pAdvertising->addServiceUUID(pService->getUUID());
-	pAdvertising->setScanResponse(true);
-	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
-	pAdvertising->setMinPreferred(0x12);
-
-	pAdvertising->start();
-
-	Serial.println("Characteristic defined!");
 }
 /*void SendDistanceTimebyCellphone()
 {
@@ -523,8 +501,32 @@ void GetDistanceTimebyDevice()
 			}
 		}
 	};
+	pService = pServer->createService(SERVICE_UUID);
+	pCharacteristic = pService->createCharacteristic(
+											CHARACTERISTIC_UUID,
+											BLECharacteristic::PROPERTY_READ |
+											BLECharacteristic::PROPERTY_WRITE |
+											BLECharacteristic::PROPERTY_NOTIFY |
+											BLECharacteristic::PROPERTY_INDICATE
+										);
+
+	pCharacteristic->addDescriptor(new BLE2902());
 	pCharacteristic->setCallbacks(new MyCharacCallbacks());
+	pService->start();
+
+
+	BLEAdvertising *pAdvertising = pServer->getAdvertising();
+	pAdvertising->addServiceUUID(pService->getUUID());
+	pAdvertising->setScanResponse(true);
+	pAdvertising->setMinPreferred(0x06);  // functions that help with iPhone connections issue
+	pAdvertising->setMinPreferred(0x12);
+
+	pAdvertising->start();
+
+	Serial.println("Characteristic defined!");
 }
+
+
 void action20()
 {
 	Serial.println("action20 activate !!\n");
