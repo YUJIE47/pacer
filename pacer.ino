@@ -8,7 +8,7 @@
 #define SERVICE_UUID        "022d75fe-9e7d-11ee-8c90-0242ac120002"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-
+// test yujie
 
 int X0 = 1, X1 = 0, X10 = 1, X11 = 0;
 //int X110 = 1, X111 = 0, X112 = 0;
