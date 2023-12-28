@@ -5,10 +5,13 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+#include "MPU9250.h"
+
 #define SERVICE_UUID        "022d75fe-9e7d-11ee-8c90-0242ac120002"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
 
-// test yujie
+#define pi 3.14
+#define g 9.81
 
 int X0 = 1, X1 = 0, X10 = 1, X11 = 0;
 //int X110 = 1, X111 = 0, X112 = 0;
@@ -19,16 +22,44 @@ int X210 = 1, X211 = 0, X212 = 0, X213 = 0, X214 = 0, X215 = 0, X216 = 0;
 int X22 = 0, X220 = 1, X221 = 0, X222 = 0, X3 = 0;
 
 //initial values
-float Distance = 0, Time = 0;
-float CompletedDistance = 0, Speed = 0;
-int Pace = 0;
-int Acc = 0, Gyro = 0;
+float Distance = 0; // km
+float Time = 0; // min
+float CompletedDistance = 0; // km
+float Speed = 0; // km/hr
+int Step = 0;
+float Stride = 0.0; // cm
+bool Pace = false;
+bool Acc = false, Gyro = false;
+
+// 藍芽傳輸參數
 bool Bluetooth_connect = false;
 bool service_started = false;
 BLECharacteristic *pCharacteristic;
 BLEService *pService;
 BLEServer *pServer;
 BLEAdvertising *pAdvertising;
+
+// 九軸感測器參數
+MPU9250 mpu; 
+int I2C_SCL = 47;
+int I2C_SDA = 21;
+
+// 配速計算參數
+int pace_seconds = 0;
+float total_seconds = 0.0;
+int hh = 0, mm = 0, ss = 0;
+
+// 速度&步數&步幅 計算參數
+float Acc_x = 0.0, Acc_y=0.0, Acc_z=0.0;
+float V_x = 0.0, V_y = 0.0, V_z = 0.0;
+float theta_x=0.0, theta_y=0.0, theta_z=0.0;
+float last_theta_x = 0.0, last_theta_y = 0.0, last_theta_z = 0.0;
+float h = 160.0;
+const float threshold_x = 5.0;  // X軸閾值
+const float threshold_y = 5.0;  // Y軸閾值
+const float threshold_z = 5.0;  // Z軸閾值
+float Gyro_x = 0.0, Gyro_y=0.0, Gyro_z=0.0;
+
 
 void grafcet0();
 void datapath0();
@@ -75,6 +106,7 @@ void ShortVibration();
 void setup()
 {
     Serial.begin(115200);
+    // 藍芽設定
     BLEDevice::init("MyESP32");
     pServer = BLEDevice::createServer();
     pService = pServer->createService(SERVICE_UUID);
@@ -85,6 +117,17 @@ void setup()
                       BLECharacteristic::PROPERTY_NOTIFY |
                       BLECharacteristic::PROPERTY_INDICATE
                     );
+                    
+    // 運動感測器初始化
+    Wire.begin(I2C_SDA, I2C_SCL);
+    delay(2000);
+    static uint32_t lastTime = 0;
+    if (!mpu.setup(0x68)){  // change to your own address
+        while (1){
+          Serial.println("MPU connection failed. Please check your connection with `connection_check` example.");
+          delay(5000);
+        }
+    }
 }
 void loop()
 {
@@ -92,7 +135,7 @@ void loop()
 	  grafcet0();
   	//printf("X0 = %d,X1 = %d,X2 = %d,X3 = %d\n",X0 ,X1 ,X2 ,X3 );
   
-  	delay(1000);
+  	delay(100);
 }
 
 void grafcet0()
@@ -261,20 +304,13 @@ void grafcet21()
 		return;
 	}
 
-	if((X213 == 1) && (Speed))
-	{
-		X213 = 0;
-		X212 = 1;
-		return;
-	}
-
-	if((X214 == 1)&& (X215 == 1))
-	{
-		X214 = 0;
-		X215 = 0;
-		X216 = 1;
-		return;
-	}
+  if((X213 == 1) && (X214 == 1)&& (X215 == 1) && (Step && Stride)){
+    X213 = 0;
+    X214 = 0;
+    X215 = 0;
+    X216 = 1;
+    return;
+  }
 
 	if((X216 == 1) && (CompletedDistance))
 	{
@@ -362,37 +398,37 @@ void datapath12()
 void datapath2()
 {
 	if(X20 == 1)
-	action20();
+	  action20();
 	if(X21 == 1)
-	SignalProcessingModule();
+	  SignalProcessingModule();
 	if(X22 == 1)
-	SpeedFeedbackModule();
+	  SpeedFeedbackModule();
 }
 void datapath21()
 {
 	if(X210 == 1)
-	action210();
+	  action210();
 	if(X211 == 1)
-	CalculatePace();
+	  CalculatePace();
 	if(X212 == 1)
-	ReadAccelerometerGyroscope();
+	  ReadAccelerometerGyroscope();
 	if(X213 == 1)
-	CalculateSpeed();
+	  CalculateSpeed();
 	if(X214 == 1)
-	CalculateStep();
+	  CalculateStep();
 	if(X215 == 1)
-	CalculateStride();
+	  CalculateStride();
 	if(X216 == 1)
-	CalculateDistance();
+	  CalculateDistance();
 }
 void datapath22()
 {
 	if(X220 == 1)
-	action220();
+	  action220();
 	if(X221 == 1)
-	LongVibration();
+	  LongVibration();
 	if(X222 == 1)
-	ShortVibration();
+	  ShortVibration();
 }
 void action0()
 {
@@ -547,27 +583,81 @@ void action210()
 }
 void CalculatePace()
 {
-	//Serial.println("CalculatePace activate !!\n");
+  Serial.println("CalculatePace activate !!\n");
+  total_seconds = Time*60;
+  pace_seconds = total_seconds / Distance;
+  hh = pace_seconds / 3600;
+  mm = (pace_seconds % 3600) / 60;
+  ss = pace_seconds % 60;
+  Pace = true;
 }
 void ReadAccelerometerGyroscope()
 {
-	//Serial.println("ReadAccelerometerGyroscope activate !!\n");
+	Serial.println("ReadAccelerometerGyroscope activate !!\n");
+  if (mpu.update()){
+    // 加速計值
+    Acc_x = mpu.getAccX();
+    Acc_y = mpu.getAccY();
+    Acc_z = mpu.getAccZ();
+    Acc = true;
+    // delete
+    Serial.print("Acc: ");
+    Serial.println(Acc_x);
+    
+    // 陀螺儀值
+    Gyro_x = mpu.getGyroX();
+    Gyro_y = mpu.getGyroY();
+    Gyro_z = mpu.getGyroZ();
+    Gyro = true;
+  }
 }
 void CalculateSpeed()
 {
-	//Serial.println("CalculateSpeed activate !!\n");
+	Serial.println("CalculateSpeed activate !!\n");
+  V_x = Acc_x*2*g*0.01;
+  V_y = Acc_y*2*g*0.01;
+  V_z = Acc_z*2*g*0.01;
+  Speed = sqrt(V_x*V_x + V_y*V_y + V_z*V_z)*3.6;  // km/hr
 }
 void CalculateStep()
 {
-	//Serial.println("CalculateStep activate !!\n");
+	Serial.println("CalculateStep activate !!\n");
+  // 加速度數據->變化角度
+  theta_x = atan(Acc_x/sqrt(Acc_y*Acc_y + Acc_z*Acc_z))*180/pi;
+  theta_y = atan(Acc_y/sqrt(Acc_x*Acc_x + Acc_z*Acc_z))*180/pi;
+  theta_z = atan(sqrt(pow(Acc_x, 2) + pow(Acc_y, 2))/Acc_z)*180/pi;
+  
+  // 判斷角度變化
+  if (abs(theta_x - last_theta_x) > threshold_x && 
+      abs(theta_y - last_theta_y) > threshold_y && 
+      abs(theta_z - last_theta_z) > threshold_z) {
+        Step += 1;
+  }
+  // 更新
+  last_theta_x = theta_x;
+  last_theta_y = theta_y;
+  last_theta_z = theta_z;
+  // delete
+  Serial.print("Step: ");
+  Serial.println(Step);
 }
 void CalculateStride()
 {
-	//Serial.println("CalculateStride activate !!\n");
+	Serial.println("CalculateStride activate !!\n");
+  Stride = h*0.43; // cm
+  // delete
+  Serial.print("Stride: ");
+  Serial.println(Stride);
 }
 void CalculateDistance()
 {
-	//Serial.println("CalculateDistance activate !!\n");
+	Serial.println("CalculateDistance activate !!\n");
+  CompletedDistance = Step*Stride/100; // m
+  // delete
+  Serial.print("Distance: ");
+  Serial.println(Distance);
+//  Acc = false;
+//  Gyro = false;
 }
 void action220()
 {
