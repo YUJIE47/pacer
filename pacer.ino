@@ -1,4 +1,4 @@
-
+// Final Version
 #include <stdio.h>
 #include <BLEDevice.h>
 #include <BLEServer.h>
@@ -6,6 +6,10 @@
 #include <BLE2902.h>
 
 #include "MPU9250.h"
+
+#include "Final_Frontier_28.h"
+#include <TFT_eSPI.h>
+#include <SPI.h>
 
 #define SERVICE_UUID        "022d75fe-9e7d-11ee-8c90-0242ac120002"
 #define CHARACTERISTIC_UUID "beb5483e-36e1-4688-b7f5-ea07361b26a8"
@@ -45,9 +49,10 @@ int I2C_SCL = 47;
 int I2C_SDA = 21;
 
 // 配速計算參數
-int pace_seconds = 0;
-float total_seconds = 0.0;
-int hh = 0, mm = 0, ss = 0;
+int t_total_seconds = 0, c_total_seconds = 0;
+int t_hh = 0, t_mm = 0, t_ss = 0;
+int c_hh = 0, c_mm = 0, c_ss = 0;
+unsigned long startTime = 0, currentTime = 0;
 
 // 速度&步數&步幅 計算參數
 float Acc_x = 0.0, Acc_y=0.0, Acc_z=0.0;
@@ -60,6 +65,8 @@ const float threshold_y = 5.0;  // Y軸閾值
 const float threshold_z = 5.0;  // Z軸閾值
 float Gyro_x = 0.0, Gyro_y=0.0, Gyro_z=0.0;
 
+// 文字顯示
+TFT_eSPI tft = TFT_eSPI();  // Invoke library
 
 void grafcet0();
 void datapath0();
@@ -128,6 +135,14 @@ void setup()
           delay(5000);
         }
     }
+
+    tft.init();
+    tft.setRotation(1);
+	// 震動馬達模組
+	pinMode(3,OUTPUT);
+
+  // 計時
+  startTime = millis();
 }
 void loop()
 {
@@ -273,7 +288,7 @@ void grafcet2()
 	if((X22 == 1) && (1))
 	{
 		X22 = 0;
-		X20 = 1;
+		X21 = 1;  // modify
 		return;
 	}
 
@@ -295,7 +310,7 @@ void grafcet21()
 		return;
 	}
 
-	if((X212 == 1) && (Acc && Gyro ))
+	if((X212 == 1) && (Acc && Gyro))
 	{
 		X212 = 0;
 		X213 = 1;
@@ -304,7 +319,7 @@ void grafcet21()
 		return;
 	}
 
-  if((X213 == 1) && (X214 == 1)&& (X215 == 1) && (Step && Stride)){
+  if((X213 == 1) && (X214 == 1)&& (X215 == 1) && (1)){
     X213 = 0;
     X214 = 0;
     X215 = 0;
@@ -312,10 +327,10 @@ void grafcet21()
     return;
   }
 
-	if((X216 == 1) && (CompletedDistance))
+	if((X216 == 1) && (1))
 	{
 		X216 = 0;
-		X212 = 1;
+		X211 = 1;
 		return;
 	}
 
@@ -325,12 +340,12 @@ void grafcet22()
 
 	if(X220 == 1)
 	{
-		if(Pace>=Speed)
+		if(t_total_seconds>=c_total_seconds)
 		{
 			X220 = 0;
 			X221 = 1;
 		}
-		else if( Pace<Speed)
+		else if( t_total_seconds<c_total_seconds)
 		{
 			X220 = 0;
 			X222 = 1;
@@ -353,8 +368,6 @@ void grafcet22()
 	}
 
 }
-
-
 void datapath0()
 {
 	if(X0 == 1) action0();
@@ -362,8 +375,6 @@ void datapath0()
 	if(X2 == 1) SignalProcessingAndSpeedFeedbackModule();
 	if(X3 == 1) DisplayData();
 }
-
-
 void datapath1()
 {
 	if(X10 == 1)
@@ -434,8 +445,6 @@ void action0()
 {
 	//Serial.println("action0 activate !!\n");
 }
-
-
 void InitialSetupModule()
 {
 	//Serial.println("InitialSetupModule activate !!\n");
@@ -443,8 +452,6 @@ void InitialSetupModule()
 	grafcet1();
 	//printf("X10 = %d, X11 = %d, X12 = %d\n",X10 ,X11 ,X12 );
 }
-
-
 void SignalProcessingAndSpeedFeedbackModule()
 {
 	Serial.println("SignalProcessingAndSpeedFeedbackModule activate !!\n");
@@ -452,9 +459,55 @@ void SignalProcessingAndSpeedFeedbackModule()
 	grafcet2();
 	//printf("X20 = %d,X21 = %d,X22 = %d\n",X20 ,X21 ,X22 );
 }
+
+
 void DisplayData()
 {
 	Serial.println("DisplayData activate !!\n");
+
+	// Wrap test at right and bottom of screen
+	tft.setTextWrap(true, true);
+
+	tft.fillScreen(TFT_BLACK);
+
+	// Load the font
+	tft.loadFont(Final_Frontier_28);
+
+	// Set "cursor" at top left corner of display (0,0)
+	// (cursor will move to next line automatically during printing with 'tft.println'
+	//  or stay on the line is there is room for the text with tft.print)
+	tft.setCursor(0, 10);
+
+	// Set the font colour to be white with a black background, set text size multiplier to 1
+	tft.setTextColor(TFT_WHITE, TFT_BLACK);
+
+	// We can now plot text on screen using the "print" class
+	tft.println("---Target---");
+	tft.print("Distance: ");
+	tft.println(Distance);
+	tft.print("Time: ");
+	tft.print(t_hh);
+	tft.print(":");
+	tft.print(t_mm);
+	tft.print(":");
+	tft.println(t_ss);
+
+	tft.println("---Current---");
+	tft.print("Distance: ");
+	tft.println(CompletedDistance);
+	tft.print("Time: ");
+	tft.print(c_hh);
+	tft.print(":");
+	tft.print(c_mm);
+	tft.print(":");
+	tft.println(c_ss);	
+	tft.print("Speed: ");
+	tft.println(Speed);
+	tft.print("Steps: ");
+	tft.println(Step);
+
+	// Unload the font to recover used RAM
+	tft.unloadFont();
 }
 void action10()
 {
@@ -580,29 +633,35 @@ void SpeedFeedbackModule()
 void action210()
 {
 	//Serial.println("action210 activate !!\n");
+  startTime = millis();
 }
 void CalculatePace()
 {
-  Serial.println("CalculatePace activate !!\n");
-  total_seconds = Time*60;
-  pace_seconds = total_seconds / Distance;
-  hh = pace_seconds / 3600;
-  mm = (pace_seconds % 3600) / 60;
-  ss = pace_seconds % 60;
+//  Serial.println("CalculatePace activate !!\n");
+  // Target
+  t_total_seconds = Time*60;  // min -> sec
+  t_hh = t_total_seconds / 3600;
+  t_mm = (t_total_seconds % 3600) / 60;
+  t_ss = t_total_seconds % 60;
+  t_total_seconds = t_total_seconds/Distance;
+  // Current
+  currentTime = millis();
+  c_total_seconds = (currentTime - startTime)/1000;  // millis -> sec
+  c_hh = c_total_seconds / 3600;
+  c_mm = (c_total_seconds % 3600) / 60;
+  c_ss = c_total_seconds % 60;
+  c_total_seconds = c_total_seconds/CompletedDistance;
   Pace = true;
 }
 void ReadAccelerometerGyroscope()
 {
-	Serial.println("ReadAccelerometerGyroscope activate !!\n");
+//	Serial.println("ReadAccelerometerGyroscope activate !!\n");
   if (mpu.update()){
     // 加速計值
     Acc_x = mpu.getAccX();
     Acc_y = mpu.getAccY();
     Acc_z = mpu.getAccZ();
     Acc = true;
-    // delete
-    Serial.print("Acc: ");
-    Serial.println(Acc_x);
     
     // 陀螺儀值
     Gyro_x = mpu.getGyroX();
@@ -613,7 +672,7 @@ void ReadAccelerometerGyroscope()
 }
 void CalculateSpeed()
 {
-	Serial.println("CalculateSpeed activate !!\n");
+//	Serial.println("CalculateSpeed activate !!\n");
   V_x = Acc_x*2*g*0.01;
   V_y = Acc_y*2*g*0.01;
   V_z = Acc_z*2*g*0.01;
@@ -621,7 +680,7 @@ void CalculateSpeed()
 }
 void CalculateStep()
 {
-	Serial.println("CalculateStep activate !!\n");
+//	Serial.println("CalculateStep activate !!\n");
   // 加速度數據->變化角度
   theta_x = atan(Acc_x/sqrt(Acc_y*Acc_y + Acc_z*Acc_z))*180/pi;
   theta_y = atan(Acc_y/sqrt(Acc_x*Acc_x + Acc_z*Acc_z))*180/pi;
@@ -637,25 +696,16 @@ void CalculateStep()
   last_theta_x = theta_x;
   last_theta_y = theta_y;
   last_theta_z = theta_z;
-  // delete
-  Serial.print("Step: ");
-  Serial.println(Step);
 }
 void CalculateStride()
 {
-	Serial.println("CalculateStride activate !!\n");
-  Stride = h*0.43; // cm
-  // delete
-  Serial.print("Stride: ");
-  Serial.println(Stride);
+//	Serial.println("CalculateStride activate !!\n");
+  Stride = h*0.45; // cm
 }
 void CalculateDistance()
 {
-	Serial.println("CalculateDistance activate !!\n");
-  CompletedDistance = Step*Stride/100; // m
-  // delete
-  Serial.print("Distance: ");
-  Serial.println(Distance);
+//	Serial.println("CalculateDistance activate !!\n");
+  CompletedDistance = Step*Stride/100000; // km
 //  Acc = false;
 //  Gyro = false;
 }
@@ -666,32 +716,22 @@ void action220()
 
 void LongVibration()
 {
-  Serial.println("LongVibration activate !!\n");
+	Serial.println("LongVibration activate !!\n");
   digitalWrite(3,LOW);
-  delay(1000);
+  delay(500);
   
   digitalWrite(3,HIGH);
-  delay(1000);
+  delay(500);
  
-  digitalWrite(3,LOW);
-  delay(1000);
- 
-  digitalWrite(3,HIGH);
-  delay(1000);
 } // LongVibration()
 
 void ShortVibration()
 {
-  Serial.println("ShortVibration activate !!\n");
+	Serial.println("ShortVibration activate !!\n");
   digitalWrite(3,LOW);
-  delay(1000);
+  delay(100);
   
   digitalWrite(3,HIGH);
-  delay(100);
+  delay(10);
  
-  digitalWrite(3,LOW);
-  delay(1000);
- 
-  digitalWrite(3,HIGH);
-  delay(100); 
 } // ShortVibration()
